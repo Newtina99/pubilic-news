@@ -40,6 +40,7 @@ Flag ONLY events of this magnitude:
 - A catastrophic global-scale cyberattack, terrorist attack, or disaster that dominates world headlines within hours.
 - A sudden, unannounced breakdown of peace talks that immediately triggers a new major war.
 Do NOT flag: routine diplomacy, ordinary elections, political scandals or court rulings, statements or warnings, isolated skirmishes, sanctions announcements, troop movements or mobilizations that have not led to attack, planned or widely anticipated actions, natural disasters below catastrophic scale, market news, celebrity news, or anything analysts describe as speculation. When in doubt, do NOT flag.
+Alert each distinct event only once. The user message includes "already_notified_event_keys". If a candidate is a continuation, follow-up, or different headline about an event already in that list, reuse the existing key exactly and return it unchanged so it is skipped; do not create a new key for the same ongoing event.
 Return strict JSON only: {"events": [{"id": <input id>, "key": "short-stable-slug", "title": "...", "summary": "1-2 concise Chinese sentences on what happened and why it is major"}]}. Return empty list when nothing qualifies."""
 
 
@@ -71,6 +72,8 @@ def main(hours: int = 3) -> None:
     if not recent:
         print("No candidates; nothing to check.")
         return
+    state = _load_state()
+    known_keys = list(state.keys())
 
     compact = [
         {
@@ -98,6 +101,7 @@ def main(hours: int = 3) -> None:
             {
                 "role": "user",
                 "content": (
+                    f"already_notified_event_keys: {json.dumps(known_keys)}\n\n"
                     "Check the latest news candidates below for a qualifying major breaking event. "
                     "Return strict JSON with key 'events'.\n\n"
                     f"{json.dumps(compact, ensure_ascii=False)}"
@@ -108,7 +112,6 @@ def main(hours: int = 3) -> None:
     payload = json.loads(response.choices[0].message.content or "{}")
     events = _parse_events(payload.get("events", []), recent)
 
-    state = _load_state()
     now = datetime.now(timezone.utc)
     fresh: list[BreakingEvent] = []
     for event in events:
